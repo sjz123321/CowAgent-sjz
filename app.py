@@ -231,7 +231,6 @@ def _clear_singleton_cache(channel_name: str):
         "wechatmp": "channel.wechatmp.wechatmp_channel.WechatMPChannel",
         "wechatmp_service": "channel.wechatmp.wechatmp_channel.WechatMPChannel",
         "wechatcom_app": "channel.wechatcom.wechatcomapp_channel.WechatComAppChannel",
-        const.WECHAT_KF: "channel.wechat_kf.wechat_kf_channel.WechatKfChannel",
         const.FEISHU: "channel.feishu.feishu_channel.FeiShuChanel",
         const.DINGTALK: "channel.dingtalk.dingtalk_channel.DingTalkChanel",
         const.WECOM_BOT: "channel.wecom_bot.wecom_bot_channel.WecomBotChannel",
@@ -287,16 +286,6 @@ def _warmup_mcp_tools():
         ToolManager()._load_mcp_tools()
     except Exception as e:
         logger.warning(f"[App] MCP warmup failed (non-fatal): {e}")
-
-
-def _warmup_scheduler():
-    """Eager-init AgentBridge so the scheduler thread starts at process
-    boot rather than waiting for the first user message."""
-    try:
-        from bridge.bridge import Bridge
-        Bridge().get_agent_bridge()
-    except Exception as e:
-        logger.warning(f"[App] Scheduler warmup failed: {e}")
 
 
 def _sync_builtin_skills():
@@ -363,8 +352,6 @@ def run():
         # Kick off MCP server loading in the background so first-message
         # latency isn't dominated by npx package downloads.
         _warmup_mcp_tools()
-
-        _warmup_scheduler()
 
         logger.info(f"[App] Starting channels: {channel_names}")
 

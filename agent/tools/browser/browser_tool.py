@@ -145,8 +145,7 @@ class BrowserTool(BaseTool):
         url = args.get("url", "").strip()
         if not url:
             return ToolResult.fail("Error: 'url' is required for navigate action")
-        # Only auto-prepend https:// for bare hosts; preserve file://, about:, data:, etc.
-        if "://" not in url and not url.startswith(("about:", "data:")):
+        if not url.startswith(("http://", "https://")):
             url = "https://" + url
         timeout = args.get("timeout", 30000)
         service = self._get_service()

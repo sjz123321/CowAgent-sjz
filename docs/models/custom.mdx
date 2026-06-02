@@ -1,21 +1,21 @@
 ---
-title: Custom
-description: Custom vendor configuration for third-party API proxies and local models
+title: 自定义
+description: 自定义厂商配置，适用于第三方 API 代理和本地模型
 ---
 
-For model services accessed via the OpenAI-compatible protocol or locally deployed models, such as:
+适用于通过 OpenAI 兼容协议接入的第三方模型服务或本地部署的模型，例如：
 
-- **Third-party API proxies**: call multiple models through a unified API base
-- **Local models**: models deployed locally with tools like Ollama, vLLM, LocalAI
-- **Private deployments**: model services deployed inside an enterprise
+- **第三方 API 代理**：使用统一的 API Base 调用多种模型
+- **本地模型**：通过 Ollama、vLLM、LocalAI 等工具在本地部署的模型
+- **私有化部署**：企业内部部署的模型服务
 
 <Note>
-  Difference from the `openai` vendor: when a custom vendor is selected, switching models via `/config model` does not automatically switch the vendor type — the custom API address is always used.
+  与 `openai` 厂商的区别：选择自定义厂商后，通过 `/config model` 切换模型时，不会自动切换厂商类型，始终使用自定义的 API 地址。
 </Note>
 
-## Text Chat
+## 配置方式
 
-### Third-party API proxy
+### 第三方 API 代理
 
 ```json
 {
@@ -26,16 +26,16 @@ For model services accessed via the OpenAI-compatible protocol or locally deploy
 }
 ```
 
-| Parameter | Description |
+| 参数 | 说明 |
 | --- | --- |
-| `bot_type` | Must be set to `custom` |
-| `model` | Model name; any model name supported by the proxy service |
-| `custom_api_key` | API key provided by the proxy service |
-| `custom_api_base` | API endpoint provided by the proxy service; must be OpenAI-compatible |
+| `bot_type` | 必须设为 `custom` |
+| `model` | 模型名称，填写代理服务支持的任意模型名 |
+| `custom_api_key` | API 密钥，由代理服务提供 |
+| `custom_api_base` | API 地址，由代理服务提供，需兼容 OpenAI 协议 |
 
-### Local models
+### 本地模型
 
-Local models usually do not require an API key — only the API base needs to be filled in:
+本地模型通常不需要 API Key，只需填写 API Base 即可：
 
 ```json
 {
@@ -45,17 +45,17 @@ Local models usually do not require an API key — only the API base needs to be
 }
 ```
 
-Common local deployment tools and their default endpoints:
+常见的本地部署工具及默认地址：
 
-| Tool | Default API Base |
+| 工具 | 默认 API Base |
 | --- | --- |
 | [Ollama](https://ollama.com) | `http://localhost:11434/v1` |
 | [vLLM](https://docs.vllm.ai) | `http://localhost:8000/v1` |
 | [LocalAI](https://localai.io) | `http://localhost:8080/v1` |
 
-### Switching Models
+## 切换模型
 
-Switching models under a custom vendor only changes `model` — `bot_type` and the API endpoint remain unchanged:
+自定义厂商下切换模型时，只会修改 `model`，不会改变 `bot_type` 和 API 地址：
 
 ```
 /config model qwen3.5:27b

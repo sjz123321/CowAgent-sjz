@@ -1,46 +1,46 @@
 ---
-title: vision - Image Understanding
-description: Analyze image content (recognition, description, OCR, etc.)
+title: vision - 图片理解
+description: 分析图片内容（识别、描述、OCR 等）
 ---
 
-Analyze local images or image URLs using Vision API. Supports content description, text extraction (OCR), object recognition, and more.
+使用 Vision API 分析本地图片或图片 URL，支持内容描述、文字提取（OCR）、物体识别等。
 
-## Model Selection
+## 模型选择
 
-The vision tool uses a multi-level auto-selection strategy with automatic fallback — no manual configuration required:
+Vision 工具采用多级自动选择 + 自动兜底策略，无需手动配置即可使用：
 
-1. **Main model** — uses the currently configured main model for image recognition (must be a multimodal model)
-2. **Other configured models** — auto-discovers other multimodal models with configured API keys as alternatives
+1. **主模型** — 优先使用当前配置的主模型进行图像识别（需要是多模态模型）
+2. **其他已配置模型** — 自动发现已配置 API Key 的其他多模态模型作为备选
 
-If the current provider fails, the tool automatically tries the next one until it succeeds or all fail.
+如果当前 provider 调用失败，会自动尝试下一个，直到成功或全部失败。
 
-### Supported Models
+### 支持的模型
 
-| Provider | Vision Model | Notes |
+| 厂商 | 视觉模型 | 说明 |
 | --- | --- | --- |
-| OpenAI / Compatible | Main model | All OpenAI-protocol-compatible multimodal models |
-| Qwen (DashScope) | Main model | e.g. qwen3.6-plus, etc. |
-| Claude | Main model | Anthropic native image format |
-| Gemini | Main model | inlineData format |
-| Doubao | Main model | doubao-seed-2-0 series natively supported |
-| Kimi (Moonshot) | Main model | kimi-k2.6, kimi-k2.5 natively supported |
-| ERNIE | Main model | Defaults to the multimodal main model (e.g. `ernie-5.1`); falls back to `ernie-4.5-turbo-vl` when the main model is not multimodal |
-| ZhipuAI | glm-5v-turbo | Always uses the dedicated vision model |
-| MiniMax | MiniMax-Text-01 | Always uses the dedicated vision model |
+| OpenAI / 兼容协议 | 使用主模型 | 支持所有 OpenAI 协议兼容的多模态模型 |
+| 通义千问 (DashScope) | 使用主模型 | 例如 qwen3.6-plus 等 |
+| Claude | 使用主模型 | Anthropic 原生图像格式 |
+| Gemini | 使用主模型 | inlineData 格式 |
+| 豆包 (Doubao) | 使用主模型 | doubao-seed-2-0 系列原生支持 |
+| Kimi (Moonshot) | 使用主模型 | kimi-k2.6、kimi-k2.5 原生支持 |
+| 百度千帆 (Qianfan) | 使用主模型 | 默认使用多模态主模型 (如 ernie-5.1)，主模型不支持时兜底使用 ernie-4.5-turbo-vl |
+| 智谱 AI | glm-5v-turbo | 固定使用视觉专用模型 |
+| MiniMax | MiniMax-Text-01 | 固定使用视觉专用模型 |
 
 <Note>
-  ZhipuAI and MiniMax text models do not support image understanding, so their dedicated vision models are always used automatically.
+  智谱和 MiniMax 的文本模型不支持图像理解，因此始终使用对应的视觉专用模型，无需手动指定。
 </Note>
 
-> When `use_linkai=true`, LinkAI's multimodal model is used by default.
+> 当 `use_linkai=true` 时，默认使用 LinkAI 的多模态模型进行
 
-## Custom Configuration
+## 自定义配置
 
-To specify the model used by Vision, configure it in `config.json`, for example:
+如果希望指定 Vision 使用的模型，可在 `config.json` 中配置，例如：
 
 ```json
 {
-    "tools": {
+    "tool": {
         "vision": {
             "model": "gpt-4.1"
         }
@@ -48,28 +48,28 @@ To specify the model used by Vision, configure it in `config.json`, for example:
 }
 ```
 
-The specified model is **used first**, and the tool automatically routes to the corresponding provider based on the model name; on failure, it falls back to other configured providers.
+指定的模型会被**优先使用**，工具会根据模型名自动路由到对应的 provider；若调用失败，会自动 fallback 到其他已配置的 provider。
 
-In most cases no configuration is needed — the tool works automatically as long as the main model supports multimodal input or any vision-capable API key is configured.
+大多数情况下无需配置，主模型支持多模态或配置任意一个支持视觉的 API Key 即可自动工作。
 
-## Parameters
+## 参数
 
-| Parameter | Type | Required | Description |
+| 参数 | 类型 | 必填 | 说明 |
 | --- | --- | --- | --- |
-| `image` | string | Yes | Local file path or HTTP(S) image URL |
-| `question` | string | Yes | Question to ask about the image |
+| `image` | string | 是 | 本地文件路径或 HTTP(S) 图片 URL |
+| `question` | string | 是 | 对图片提出的问题 |
 
-Supported image formats: jpg, jpeg, png, gif, webp
+支持的图片格式：jpg、jpeg、png、gif、webp
 
 
 
-## Use Cases
+## 使用场景
 
-- Describe image content
-- Extract text from images (OCR)
-- Identify objects, colors, scenes
-- Analyze screenshots and scanned documents
+- 描述图片中的内容
+- 提取图片中的文字（OCR）
+- 识别物体、颜色、场景
+- 分析截图、文档扫描图片等
 
 <Note>
-  Images larger than 1MB are automatically compressed before upload. All images (including remote URLs) are converted to base64 for transmission to ensure compatibility with all model backends.
+  超过 1MB 的图片会自动压缩后上传，所有图片（包括远程 URL）会统一转为 base64 传输，确保兼容所有模型后端。
 </Note>

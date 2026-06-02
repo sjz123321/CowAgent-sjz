@@ -1,24 +1,24 @@
 ---
-title: edit - File Edit
-description: Edit files via precise text replacement
+title: edit - 文件编辑
+description: 通过精确文本替换编辑文件
 ---
 
-Edit files via precise text replacement. If `oldText` is empty, appends to the end of the file.
+通过精确文本替换编辑文件。如果 `oldText` 为空则追加到文件末尾。
 
-## Dependencies
+## 依赖
 
-No extra dependencies, available by default.
+无额外依赖，默认可用。
 
-## Parameters
+## 参数
 
-| Parameter | Type | Required | Description |
+| 参数 | 类型 | 必填 | 说明 |
 | --- | --- | --- | --- |
-| `path` | string | Yes | File path |
-| `oldText` | string | Yes | Original text to replace (empty to append) |
-| `newText` | string | Yes | Replacement text |
+| `path` | string | 是 | 文件路径 |
+| `oldText` | string | 是 | 要替换的原始文本（为空时追加到末尾） |
+| `newText` | string | 是 | 替换后的文本 |
 
-## Use Cases
+## 使用场景
 
-- Modify specific parameters in configuration files
-- Fix bugs in code
-- Insert content at specific positions in files
+- 修改配置文件中的特定参数
+- 修复代码中的 bug
+- 在文件指定位置插入内容

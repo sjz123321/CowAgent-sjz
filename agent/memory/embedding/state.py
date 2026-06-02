@@ -31,13 +31,9 @@ def detect_index_dim(storage) -> Optional[int]:
     if not row or not row["embedding"]:
         return None
     try:
-        raw = row["embedding"]
-        if isinstance(raw, (bytes, bytearray)):
-            # New BLOB format: 4 bytes per float32
-            return len(raw) // 4
-        emb = json.loads(raw)
+        emb = json.loads(row["embedding"])
         return len(emb) if isinstance(emb, list) else None
-    except (json.JSONDecodeError, TypeError, Exception):
+    except (json.JSONDecodeError, TypeError):
         return None
 
 
