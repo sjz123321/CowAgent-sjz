@@ -31,4 +31,4 @@
 
 ### 部署文档
 
-`docs/weixin-tts-guide.md` 包含上述所有功能在其它机器上部署的详细步骤。
+[`docs/weixin-tts-guide.md`](docs/weixin-tts-guide.md) 包含上述所有功能在其它机器上部署的详细步骤。
