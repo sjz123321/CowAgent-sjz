@@ -514,14 +514,15 @@ class WeixinChannel(ChatChannel):
             if content.startswith("/clear-log"):
                 count_tmp = TmpDir.cleanup(days=0)
                 count_wx = 0
-                # Also clean /tmp/wx_media_* files from _resolve_media_path
-                for f in os.listdir("/tmp/"):
-                    if f.startswith("wx_media_"):
-                        try:
-                            os.remove(os.path.join("/tmp", f))
-                            count_wx += 1
-                        except Exception:
-                            pass
+                # Clean /tmp/wx_media_* files from _resolve_media_path
+                if os.path.isdir("/tmp/"):
+                    for f in os.listdir("/tmp/"):
+                        if f.startswith("wx_media_"):
+                            try:
+                                os.remove(os.path.join("/tmp", f))
+                                count_wx += 1
+                            except Exception:
+                                pass
                 total = count_tmp + count_wx
                 self._send_text(
                     f"缓存清理完成，已清除 {total} 个临时文件" if total else "没有需要清理的缓存文件",

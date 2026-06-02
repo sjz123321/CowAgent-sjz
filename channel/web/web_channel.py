@@ -1136,6 +1136,26 @@ class ConfigHandler:
             raw_pwd = local_config.get("web_password", "")
             masked_pwd = ("*" * len(raw_pwd)) if raw_pwd else ""
 
+            # Build presets list with masked keys for display
+            raw_presets = local_config.get("model_presets", {})
+            presets_out = {}
+            for pid, p in raw_presets.items():
+                out = {
+                    "label": p.get("label", pid),
+                    "provider": p.get("provider", ""),
+                    "model": p.get("model", ""),
+                }
+                # Mask api_key in the preset for display
+                raw_key = p.get("api_key", "")
+                if raw_key:
+                    out["api_key"] = self._mask_key(raw_key)
+                else:
+                    out["api_key"] = ""
+                out["api_base"] = p.get("api_base", "")
+                presets_out[pid] = out
+
+            active_preset = local_config.get("active_preset", "")
+
             return json.dumps({
                 "status": "success",
                 "use_agent": use_agent,
@@ -1152,6 +1172,8 @@ class ConfigHandler:
                 "api_keys": api_keys_masked,
                 "providers": providers,
                 "web_password_masked": masked_pwd,
+                "presets": presets_out,
+                "active_preset": active_preset,
             }, ensure_ascii=False)
         except Exception as e:
             logger.error(f"Error getting config: {e}")
@@ -1162,6 +1184,19 @@ class ConfigHandler:
         web.header('Content-Type', 'application/json; charset=utf-8')
         try:
             data = json.loads(web.data())
+            action = data.get("action")
+
+            # --- Preset: switch ---
+            if action == "switch_preset":
+                return self._switch_preset(data)
+            # --- Preset: save ---
+            if action == "save_preset":
+                return self._save_preset(data)
+            # --- Preset: delete ---
+            if action == "delete_preset":
+                return self._delete_preset(data)
+
+            # --- Legacy: direct updates ---
             updates = data.get("updates", {})
             if not updates:
                 return json.dumps({"status": "error", "message": "no updates provided"})
@@ -1195,8 +1230,6 @@ class ConfigHandler:
             logger.info(f"[WebChannel] Config updated: {list(applied.keys())}")
 
             # Reset Bridge so that bot routing reflects the new config.
-            # Without this, Bridge keeps its cached bot instance (e.g. LinkAIBot)
-            # even after the user switches bot_type / use_linkai / model in UI.
             bridge_routing_keys = {"bot_type", "use_linkai", "model"}
             if any(k in applied for k in bridge_routing_keys):
                 try:
@@ -1210,6 +1243,175 @@ class ConfigHandler:
         except Exception as e:
             logger.error(f"Error updating config: {e}")
             return json.dumps({"status": "error", "message": str(e)})
+
+    # ------------------------------------------------------------------
+    # Preset helpers
+    # ------------------------------------------------------------------
+    def _switch_preset(self, data: dict) -> str:
+        """Apply a saved preset: write its fields into the main config and reset bridge."""
+        preset_id = data.get("preset_id", "")
+        if not preset_id:
+            return json.dumps({"status": "error", "message": "preset_id required"})
+
+        local_config = conf()
+        raw_presets = local_config.get("model_presets", {})
+        preset = raw_presets.get(preset_id)
+        if not preset:
+            return json.dumps({"status": "error", "message": f"preset '{preset_id}' not found"})
+
+        provider_id = preset.get("provider", "")
+        pinfo = self.PROVIDER_MODELS.get(provider_id)
+
+        applied = {}
+
+        # Model
+        model = preset.get("model", "")
+        if model:
+            local_config["model"] = model
+            applied["model"] = model
+
+        # Bot type / use_linkai
+        if provider_id == "linkai":
+            local_config["use_linkai"] = True
+            local_config["bot_type"] = ""
+            applied["use_linkai"] = True
+            applied["bot_type"] = ""
+        else:
+            local_config["use_linkai"] = False
+            local_config["bot_type"] = provider_id if provider_id else ""
+            applied["use_linkai"] = False
+            applied["bot_type"] = provider_id if provider_id else ""
+
+        # API key
+        if pinfo:
+            key_field = pinfo.get("api_key_field")
+            preset_key = preset.get("api_key", "")
+            if key_field and preset_key:
+                local_config[key_field] = preset_key
+                applied[key_field] = preset_key
+
+            # API base
+            base_key = pinfo.get("api_base_key")
+            preset_base = preset.get("api_base", "")
+            if base_key:
+                if preset_base:
+                    local_config[base_key] = preset_base
+                    applied[base_key] = preset_base
+                elif pinfo.get("api_base_default"):
+                    local_config[base_key] = pinfo["api_base_default"]
+                    applied[base_key] = pinfo["api_base_default"]
+
+        # Mark active preset
+        local_config["active_preset"] = preset_id
+        applied["active_preset"] = preset_id
+
+        # Persist to config.json
+        config_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(
+            os.path.abspath(__file__)))), "config.json")
+        if os.path.exists(config_path):
+            with open(config_path, "r", encoding="utf-8") as f:
+                file_cfg = json.load(f)
+        else:
+            file_cfg = {}
+        file_cfg.update(applied)
+        with open(config_path, "w", encoding="utf-8") as f:
+            json.dump(file_cfg, f, indent=4, ensure_ascii=False)
+
+        logger.info(f"[WebChannel] Switched to preset '{preset_id}': {applied}")
+
+        # Reset bridge
+        try:
+            from bridge.bridge import Bridge
+            Bridge().reset_bot()
+            logger.info("[WebChannel] Bridge bot routing reset after preset switch")
+        except Exception as reset_err:
+            logger.warning(f"[WebChannel] Failed to reset bridge: {reset_err}")
+
+        return json.dumps({"status": "success", "applied": applied}, ensure_ascii=False)
+
+    def _save_preset(self, data: dict) -> str:
+        """Save or update a preset from current form fields."""
+        preset_id = data.get("preset_id", "")
+        label = data.get("label", preset_id)
+        provider = data.get("provider", "")
+        model = data.get("model", "")
+        api_key = data.get("api_key", "")
+        api_base = data.get("api_base", "")
+
+        if not preset_id or not provider or not model:
+            return json.dumps({"status": "error", "message": "preset_id, provider, and model are required"})
+
+        # If api_key is empty, try to read it from the current config
+        if not api_key:
+            pinfo = self.PROVIDER_MODELS.get(provider)
+            if pinfo:
+                key_field = pinfo.get("api_key_field")
+                if key_field:
+                    api_key = conf().get(key_field, "")
+
+        local_config = conf()
+        raw_presets = local_config.get("model_presets", {})
+        raw_presets.setdefault(preset_id, {})
+
+        raw_presets[preset_id] = {
+            "label": label,
+            "provider": provider,
+            "model": model,
+            "api_key": api_key,
+            "api_base": api_base,
+        }
+
+        local_config["model_presets"] = raw_presets
+
+        config_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(
+            os.path.abspath(__file__)))), "config.json")
+        if os.path.exists(config_path):
+            with open(config_path, "r", encoding="utf-8") as f:
+                file_cfg = json.load(f)
+        else:
+            file_cfg = {}
+        file_cfg["model_presets"] = raw_presets
+        with open(config_path, "w", encoding="utf-8") as f:
+            json.dump(file_cfg, f, indent=4, ensure_ascii=False)
+
+        logger.info(f"[WebChannel] Preset saved: '{preset_id}' ({label})")
+
+        return json.dumps({"status": "success", "preset_id": preset_id}, ensure_ascii=False)
+
+    def _delete_preset(self, data: dict) -> str:
+        """Delete a saved preset."""
+        preset_id = data.get("preset_id", "")
+        if not preset_id:
+            return json.dumps({"status": "error", "message": "preset_id required"})
+
+        local_config = conf()
+        raw_presets = local_config.get("model_presets", {})
+        if preset_id not in raw_presets:
+            return json.dumps({"status": "error", "message": f"preset '{preset_id}' not found"})
+
+        del raw_presets[preset_id]
+        local_config["model_presets"] = raw_presets
+
+        # Clear active_preset if it was the deleted one
+        if local_config.get("active_preset") == preset_id:
+            local_config["active_preset"] = ""
+
+        config_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(
+            os.path.abspath(__file__)))), "config.json")
+        if os.path.exists(config_path):
+            with open(config_path, "r", encoding="utf-8") as f:
+                file_cfg = json.load(f)
+        else:
+            file_cfg = {}
+        file_cfg["model_presets"] = raw_presets
+        if "active_preset" in file_cfg and file_cfg.get("active_preset") == preset_id:
+            file_cfg["active_preset"] = ""
+        with open(config_path, "w", encoding="utf-8") as f:
+            json.dump(file_cfg, f, indent=4, ensure_ascii=False)
+
+        logger.info(f"[WebChannel] Preset deleted: '{preset_id}'")
+
+        return json.dumps({"status": "success"}, ensure_ascii=False)
 
 
 class ChannelsHandler:

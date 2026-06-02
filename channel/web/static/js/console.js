@@ -42,6 +42,11 @@ const I18N = {
         config_channel_type: '通道类型',
         config_provider: '模型厂商', config_model_name: '模型',
         config_custom_model_hint: '输入自定义模型名称',
+        config_preset: '模型预设', config_preset_save: '另存为',
+        config_preset_delete: '删除', config_preset_name_placeholder: '预设名称...',
+        config_preset_saved: '预设已保存', config_preset_deleted: '预设已删除',
+        config_preset_switched: '预设已切换', config_preset_delete_confirm: '确认删除该预设？',
+        config_preset_name_required: '请输入预设名称',
         config_save: '保存', config_saved: '已保存',
         config_save_error: '保存失败',
         config_custom_option: '自定义...',
@@ -143,6 +148,11 @@ const I18N = {
         config_channel_type: 'Channel Type',
         config_provider: 'Provider', config_model_name: 'Model',
         config_custom_model_hint: 'Enter custom model name',
+        config_preset: 'Model Preset', config_preset_save: 'Save As',
+        config_preset_delete: 'Delete', config_preset_name_placeholder: 'Preset name...',
+        config_preset_saved: 'Preset saved', config_preset_deleted: 'Preset deleted',
+        config_preset_switched: 'Preset switched', config_preset_delete_confirm: 'Delete this preset?',
+        config_preset_name_required: 'Please enter a preset name',
         config_save: 'Save', config_saved: 'Saved',
         config_save_error: 'Save failed',
         config_custom_option: 'Custom...',
@@ -2476,6 +2486,8 @@ let configApiKeys = {};
 let configCurrentModel = '';
 let cfgProviderValue = '';
 let cfgModelValue = '';
+let configPresets = {};
+let configActivePreset = '';
 
 // --- Custom dropdown helper ---
 function initDropdown(el, options, selectedValue, onChange) {
@@ -2533,6 +2545,11 @@ function initConfigView(data) {
     configApiBases = data.api_bases || {};
     configApiKeys = data.api_keys || {};
     configCurrentModel = data.model || '';
+    configPresets = data.presets || {};
+    configActivePreset = data.active_preset || '';
+
+    // Initialize preset dropdown
+    initPresetSelector();
 
     const providerEl = document.getElementById('cfg-provider');
     const providerOpts = Object.entries(configProviders).map(([pid, p]) => ({ value: pid, label: p.label }));
@@ -2693,6 +2710,130 @@ function syncModelSelection(model) {
         document.getElementById('cfg-model-custom-wrap').classList.remove('hidden');
         document.getElementById('cfg-model-custom').value = model;
     }
+}
+
+// --- Preset functions ---
+function initPresetSelector() {
+    const el = document.getElementById('cfg-preset');
+    if (!el) return;
+
+    const opts = [{ value: '', label: '-- ' + t('config_custom_option') + ' --' }];
+    for (const [pid, p] of Object.entries(configPresets)) {
+        const suffix = pid === configActivePreset ? ' ✓' : '';
+        opts.push({ value: pid, label: (p.label || pid) + suffix });
+    }
+
+    initDropdown(el, opts, configActivePreset || '', (val) => {
+        if (val) switchPreset(val);
+    });
+
+    // Update delete button state
+    const delBtn = document.getElementById('cfg-preset-delete');
+    if (delBtn) delBtn.disabled = !configActivePreset;
+}
+
+function switchPreset(presetId) {
+    if (!presetId) return;
+    const btn = document.getElementById('cfg-model-save');
+    if (btn) btn.disabled = true;
+
+    fetch('/config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'switch_preset', preset_id: presetId })
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.status === 'success') {
+            loadConfigView();
+            showStatus('cfg-preset-status', 'config_preset_switched', false);
+        } else {
+            showStatus('cfg-preset-status', 'config_save_error', true);
+        }
+    })
+    .catch(() => showStatus('cfg-preset-status', 'config_save_error', true))
+    .finally(() => { if (btn) btn.disabled = false; });
+}
+
+function saveCurrentAsPreset() {
+    const nameInput = document.getElementById('cfg-preset-name');
+    const label = nameInput.value.trim();
+    if (!label) {
+        showStatus('cfg-preset-status', 'config_preset_name_required', true);
+        return;
+    }
+
+    // Generate a preset id from the label
+    const presetId = label.toLowerCase().replace(/[^a-z0-9一-鿿]+/g, '-').replace(/^-|-$/g, '') || 'preset';
+
+    const model = getSelectedModel();
+    if (!model) return;
+
+    const provider = cfgProviderValue;
+    const p = configProviders[provider];
+    let apiKey = '';
+    let apiBase = '';
+
+    if (p && p.api_key_field) {
+        const keyInput = document.getElementById('cfg-api-key');
+        const rawVal = keyInput.value.trim();
+        // Only send the key if user typed it (not masked)
+        if (rawVal && keyInput.dataset.masked !== '1') {
+            apiKey = rawVal;
+        }
+        // If masked, leave apiKey empty — backend will read from current config
+    }
+    if (p && p.api_base_key) {
+        apiBase = document.getElementById('cfg-api-base').value.trim();
+    }
+
+    fetch('/config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            action: 'save_preset',
+            preset_id: presetId,
+            label: label,
+            provider: provider,
+            model: model,
+            api_key: apiKey,
+            api_base: apiBase,
+        })
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.status === 'success') {
+            nameInput.value = '';
+            loadConfigView();
+            showStatus('cfg-preset-status', 'config_preset_saved', false);
+        } else {
+            showStatus('cfg-preset-status', 'config_save_error', true);
+        }
+    })
+    .catch(() => showStatus('cfg-preset-status', 'config_save_error', true));
+}
+
+function deletePreset() {
+    const pid = configActivePreset;
+    if (!pid) return;
+
+    if (!confirm(t('config_preset_delete_confirm') + ' (' + (configPresets[pid]?.label || pid) + ')')) return;
+
+    fetch('/config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'delete_preset', preset_id: pid })
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.status === 'success') {
+            loadConfigView();
+            showStatus('cfg-preset-status', 'config_preset_deleted', false);
+        } else {
+            showStatus('cfg-preset-status', 'config_save_error', true);
+        }
+    })
+    .catch(() => showStatus('cfg-preset-status', 'config_save_error', true));
 }
 
 function getSelectedModel() {
